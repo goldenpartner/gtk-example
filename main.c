@@ -1,93 +1,76 @@
 #include <gtk/gtk.h>
 
 
-static int ptimer = 0;
-int pstat = TRUE;
-
-/* This function increments and updates the progress bar, it also resets
- the progress bar if pstat is FALSE */
-gint progress (gpointer data)
+static gboolean
+fill (gpointer   user_data)
 {
+  GtkWidget *progress_bar = user_data;
 
-	GtkWidget *progress_bar = data;
-	GtkProgressBar * bar = GTK_PROGRESS_BAR (progress_bar);
-    gdouble pvalue;
-    
-    /* get the current value of the progress bar */
-    pvalue = gtk_progress_bar_get_fraction(GTK_PROGRESS_BAR (data));
-    
-    if ((pvalue >= 1.0) || (pstat == FALSE)) {
-        pvalue = 0.0;
-        pstat = TRUE;
-    }
-    pvalue += 0.01;
-    
-    gtk_progress_bar_update (GTK_PROGRESS_BAR (data), pvalue);
-    
+  /*Get the current progress*/
+  gdouble fraction;
+  fraction = gtk_progress_bar_get_fraction (GTK_PROGRESS_BAR (progress_bar));
+
+  /*Increase the bar by 10% each time this function is called*/
+  fraction += 0.1;
+
+  /*Fill in the bar with the new fraction*/
+  gtk_progress_bar_set_fraction (GTK_PROGRESS_BAR (progress_bar), fraction);
+
+  /*Ensures that the fraction stays below 1.0*/
+  if (fraction < 1.0) 
     return TRUE;
+  
+  return FALSE;
 }
 
-/* This function signals a reset of the progress bar */
-void progress_r (void)
-{  
-    pstat = FALSE;  
-}
 
-void destroy (GtkWidget *widget, gpointer *data)
+
+static void
+activate (GtkApplication *app,
+          gpointer        user_data)
 {
-    gtk_main_quit ();
-}
+	GtkWidget *window, *box, *widget1;
+	GtkWidget *progress_bar;
 
-int main (int argc, char *argv[])
+	gdouble fraction = 0.0;
+
+	/*Create a window with a title, and a default size*/
+	window = gtk_application_window_new (app);
+	gtk_window_set_title (GTK_WINDOW (window), "ProgressBar with button");
+	gtk_window_set_default_size (GTK_WINDOW (window), 500, 500);
+ 
+	widget1 = gtk_button_new_with_label("button1");
+        
+
+    box = gtk_box_new(TRUE, 10);
+    gtk_box_pack_start(GTK_BOX(box), widget1, 0 ,0, 1);
+	gtk_container_add (GTK_CONTAINER (window), box);
+	
+	/*Create a progressbar and add it to the window*/
+	progress_bar = gtk_progress_bar_new ();
+	gtk_box_pack_start(GTK_BOX(box), progress_bar, 0 ,0, 1);
+	/*Fill in the given fraction of the bar. Has to be between 0.0-1.0 inclusive*/
+	gtk_progress_bar_set_fraction (GTK_PROGRESS_BAR (progress_bar), fraction);
+
+	/*Use the created fill function every 500 milliseconds*/
+	g_timeout_add (500, fill, GTK_PROGRESS_BAR (progress_bar));
+	
+		
+	gtk_widget_show_all (window);
+}
+ 
+
+
+int
+main (int argc, char **argv)
 {
-    GtkWidget *window;
-    GtkWidget *button;
-    GtkWidget *label;
-    GtkWidget *table;
-    GtkWidget *pbar;
-    
-    gtk_init (&argc, &argv);
-    
-    window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-    
-    gtk_signal_connect (GTK_OBJECT (window), "destroy",
-                        GTK_SIGNAL_FUNC (destroy), NULL);
-    
-    gtk_container_border_width (GTK_CONTAINER (window), 10);
-    
-    table = gtk_table_new(3,2,TRUE);
-    gtk_container_add (GTK_CONTAINER (window), table);
-    
-    label = gtk_label_new ("Progress Bar Example");
-    gtk_table_attach_defaults(GTK_TABLE(table), label, 0,2,0,1);
-    gtk_widget_show(label);
-    
-    /* Create a new progress bar, pack it into the table, and show it */
-    pbar = gtk_progress_bar_new ();
-    gtk_table_attach_defaults(GTK_TABLE(table), pbar, 0,2,1,2);
-    gtk_widget_show (pbar);
-    
-    /* Set the timeout to handle automatic updating of the progress bar */
-    ptimer = gtk_timeout_add (100, progress, pbar);
-    
-    /* This button signals the progress bar to be reset */
-    button = gtk_button_new_with_label ("Reset");
-    gtk_signal_connect (GTK_OBJECT (button), "clicked",
-                        GTK_SIGNAL_FUNC (progress_r), NULL);
-    gtk_table_attach_defaults(GTK_TABLE(table), button, 0,1,2,3);
-    gtk_widget_show(button);
-    
-    button = gtk_button_new_with_label ("Cancel");
-    gtk_signal_connect (GTK_OBJECT (button), "clicked",
-                        GTK_SIGNAL_FUNC (destroy), NULL);
-    
-    gtk_table_attach_defaults(GTK_TABLE(table), button, 1,2,2,3);
-    gtk_widget_show (button);
-    
-    gtk_widget_show(table);
-    gtk_widget_show(window);
-    
-    gtk_main ();
-    
-    return 0;
+  GtkApplication *app;
+  int status;
+ 
+  app = gtk_application_new ("org.gtk.example", G_APPLICATION_FLAGS_NONE);
+  g_signal_connect (app, "activate", G_CALLBACK (activate), NULL);
+  status = g_application_run (G_APPLICATION (app), argc, argv);
+  g_object_unref (app);
+ 
+  return status;
 }
