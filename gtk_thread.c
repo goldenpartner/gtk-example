@@ -1,6 +1,6 @@
 #include <gtk/gtk.h>
 
-GtkWidget *progress_bar;
+
 
 typedef struct
 {
@@ -8,17 +8,21 @@ typedef struct
   guint       progress_id;
 } WorkerData;
 
+WorkerData *wd;
+GtkWidget *progress_bar;
+gdouble fraction = 0.0;
 
 static gboolean
 worker_finish_in_idle (gpointer data)
 {
   WorkerData *wd = data;
+  if(wd){
+    /* we're done, stop updating the progress bar */
+    g_source_remove (wd->progress_id);
+    /* and destroy everything */
+    //g_free (wd);
+  }
   
-  /* we're done, stop updating the progress bar */
-  g_source_remove (wd->progress_id);
-  /* and destroy everything */
-  gtk_widget_destroy (wd->window);
-  g_free (wd);
   
   return FALSE; /* stop running */
 }
@@ -29,7 +33,8 @@ worker (gpointer data)
   WorkerData *wd = data;
   
   /* hard work here */
-  g_usleep (15e6);
+  while (fraction < 1)
+    g_usleep (1);
   
   /* we finished working, do something back in the main thread */
   g_idle_add (worker_finish_in_idle, wd);
@@ -47,14 +52,15 @@ update_progress_in_timeout (gpointer pbar)
 static gboolean
 fill (gpointer   user_data)
 {
+    
 	GtkWidget *progress_bar = user_data;
 
 	/*Get the current progress*/
-	gdouble fraction;
-	fraction = gtk_progress_bar_get_fraction (GTK_PROGRESS_BAR (progress_bar));
+    gfloat temp = gtk_progress_bar_get_fraction (GTK_PROGRESS_BAR (progress_bar));
+	fraction = (fraction < temp) ? fraction : temp;
 
 	/*Increase the bar by 10% each time this function is called*/
-	fraction += 0.01;
+	fraction += 0.1;
 
 	/*Fill in the bar with the new fraction*/
 	gtk_progress_bar_set_fraction (GTK_PROGRESS_BAR (progress_bar), fraction);
@@ -70,19 +76,34 @@ static void
 button_clicked_handler (GtkWidget  *button,
                         gpointer    data)
 {
-  WorkerData *wd;
-  GThread    *thread;
-  
-  wd = g_malloc (sizeof *wd);
-  
-  wd->window = data;
+    fraction = 0.0;
     
-  /* add a timeout that will update the progress bar every 100ms */
-  wd->progress_id = g_timeout_add (100, fill, progress_bar);
-  
-  /* run the time-consuming operation in a separate thread */
-  thread = g_thread_new ("worker", worker, wd);
-  g_thread_unref (thread);
+    GThread    *thread;
+    if (!wd){
+        wd = g_malloc (sizeof *wd);
+        wd->window = data;
+        
+        /* add a timeout that will update the progress bar every 100ms */
+        wd->progress_id = g_timeout_add (500, fill, progress_bar);
+        
+        /* run the time-consuming operation in a separate thread */
+        thread = g_thread_new ("worker", worker, wd);
+        g_thread_unref (thread);
+    }
+    else{
+        /* we finished working, do something back in the main thread */
+        g_idle_add (worker_finish_in_idle, wd);
+        wd = g_malloc (sizeof *wd);
+        wd->window = data;
+        
+        /* add a timeout that will update the progress bar every 100ms */
+        wd->progress_id = g_timeout_add (500, fill, progress_bar);
+        
+        /* run the time-consuming operation in a separate thread */
+        thread = g_thread_new ("worker", worker, wd);
+        g_thread_unref (thread);
+    }
+    
 }
 
 int
@@ -93,7 +114,7 @@ main (int     argc,
     GtkWidget  *button;
     GtkWidget  *box;
 
-    gdouble fraction = 0.0;
+    
 
     gtk_init (&argc, &argv);
     
