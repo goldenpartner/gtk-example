@@ -79,7 +79,7 @@ fill (gpointer   user_data)
 	fraction = gtk_progress_bar_get_fraction (GTK_PROGRESS_BAR (progress_bar));
 
 	/*Increase the bar by 10% each time this function is called*/
-	fraction += 0.1;
+	fraction += 0.05;
 
 	/*Fill in the bar with the new fraction*/
 	gtk_progress_bar_set_fraction (GTK_PROGRESS_BAR (progress_bar), fraction);
@@ -101,7 +101,7 @@ main (int     argc,
   GtkWidget *progress_bar, *box;
 
   gdouble fraction = 0.0;
-  
+
   gtk_init (&argc, &argv);
   
   window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
