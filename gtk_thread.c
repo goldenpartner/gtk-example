@@ -1,7 +1,5 @@
 #include <gtk/gtk.h>
-
-
-
+#include <stdlib.h>
 typedef struct
 {
 	GtkWidget  *window;
@@ -10,19 +8,18 @@ typedef struct
 
 WorkerData *wd = NULL;
 GtkWidget *progress_bar;
+GThread *thread = NULL;
 gdouble fraction = 0.0;
+int run = 0;
 
 static gboolean
 worker_finish_in_idle (gpointer data)
 {
-	WorkerData *wd = data;
-	if(wd){
+	WorkerData *w = data;
+	if(w){
 		/* we're done, stop updating the progress bar */
-		g_source_remove (wd->progress_id);
-		/* and destroy everything */
-		g_free (wd);
+		g_source_remove (w->progress_id);
   	}
-  
   
   	return FALSE; /* stop running */
 }
@@ -32,16 +29,12 @@ worker (gpointer data)
 {
   	WorkerData *wd = data;
 	
-	/* hard work here */
-	while (fraction < 1){
-			g_usleep (1000000);
-			gfloat temp = gtk_progress_bar_get_fraction (GTK_PROGRESS_BAR (progress_bar));
-			fraction = (fraction < temp) ? fraction : temp;
-
-			fraction += 0.1;
-			//gdk_threads_add_idle ();
-
-			gtk_progress_bar_set_fraction (GTK_PROGRESS_BAR (progress_bar), fraction);
+	while (fraction < 1 && run == 1){
+		g_usleep (1e6);//pause for one second
+		gfloat temp = gtk_progress_bar_get_fraction (GTK_PROGRESS_BAR (progress_bar));
+		fraction = (fraction < temp) ? fraction : temp;
+		fraction += 0.1;
+		gtk_progress_bar_set_fraction (GTK_PROGRESS_BAR (progress_bar), fraction);
 	}
 	
 	/* we finished working, do something back in the main thread */
@@ -50,43 +43,30 @@ worker (gpointer data)
 	return NULL;
 }
 
-static gboolean
-update_progress_in_timeout (gpointer pbar)
-{
-	gtk_progress_bar_pulse (pbar);
-	
-	return TRUE; /* keep running */
-}
-static gboolean
-fill (gpointer   user_data)
-{
-    
-	GtkWidget *progress_bar = user_data;
-
-	/*Ensures that the fraction stays below 1.0*/
-	if (fraction < 1.0) 
-		return TRUE;
-	
-	return FALSE;
-}
-
 static void
 button_clicked_handler (GtkWidget  *button,
                         gpointer    data)
 {
-    fraction = 0.0;
-    
     GThread    *thread;
     if (wd){
-        g_source_remove(wd->progress_id);
+		run = 0;
+		g_usleep(1e6);
+		fraction = 0;
+		gtk_progress_bar_set_fraction (GTK_PROGRESS_BAR (progress_bar), fraction);
+		wd = NULL;
+		thread = NULL;
     }
+
+	fraction = 0.0;
+    run = 1;
+
     wd = (WorkerData*)g_malloc (sizeof (WorkerData));
     wd->window = data;
-        
+    
     /* run the time-consuming operation in a separate thread */
     thread = g_thread_new ("worker", worker, wd);
-    g_thread_unref (thread);
-    
+    g_thread_unref (thread);   
+	
 }
 
 int
@@ -94,10 +74,8 @@ main (int     argc,
       char  **argv)
 {
     GtkWidget  *window;
-    GtkWidget  *button;
+    GtkWidget  *button1, *button2;
     GtkWidget  *box;
-
-    
 
     gtk_init (&argc, &argv);
     
@@ -106,17 +84,16 @@ main (int     argc,
     g_signal_connect (G_OBJECT (window), "destroy",
                         G_CALLBACK (gtk_main_quit), NULL);
     
-    button = gtk_button_new_from_stock (GTK_STOCK_OK);
-    
+    button1 = gtk_button_new_with_label ("Start");
 
 	/*Create a progressbar and add it to the window*/
 	progress_bar = gtk_progress_bar_new ();
 
-    g_signal_connect (G_OBJECT (button), "clicked",
+    g_signal_connect (G_OBJECT (button1), "clicked",
                     G_CALLBACK (button_clicked_handler), window);
 
     box = gtk_box_new(TRUE, 10);
-    gtk_box_pack_start(GTK_BOX(box), button, 0 ,0, 1);
+    gtk_box_pack_start(GTK_BOX(box), button1, 0 ,0, 1);
 	gtk_box_pack_start(GTK_BOX(box), progress_bar, 0 ,0, 1);
 	gtk_container_add (GTK_CONTAINER (window), box);
 
