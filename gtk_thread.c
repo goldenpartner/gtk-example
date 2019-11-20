@@ -8,7 +8,7 @@ typedef struct
   guint       progress_id;
 } WorkerData;
 
-WorkerData *wd;
+WorkerData *wd = NULL;
 GtkWidget *progress_bar;
 gdouble fraction = 0.0;
 
@@ -33,8 +33,16 @@ worker (gpointer data)
   WorkerData *wd = data;
   
   /* hard work here */
-  while (fraction < 1)
-    g_usleep (1);
+  while (fraction < 1){
+    g_usleep (1000000);
+    gfloat temp = gtk_progress_bar_get_fraction (GTK_PROGRESS_BAR (progress_bar));
+  	fraction = (fraction < temp) ? fraction : temp;
+
+    fraction += 0.1;
+    if (fraction >= 1)
+      fraction = 0;
+    gtk_progress_bar_set_fraction (GTK_PROGRESS_BAR (progress_bar), fraction);
+  }
   
   /* we finished working, do something back in the main thread */
   g_idle_add (worker_finish_in_idle, wd);
@@ -56,11 +64,11 @@ fill (gpointer   user_data)
 	GtkWidget *progress_bar = user_data;
 
 	/*Get the current progress*/
-    gfloat temp = gtk_progress_bar_get_fraction (GTK_PROGRESS_BAR (progress_bar));
-	fraction = (fraction < temp) ? fraction : temp;
+   // gfloat temp = gtk_progress_bar_get_fraction (GTK_PROGRESS_BAR (progress_bar));
+//	fraction = (fraction < temp) ? fraction : temp;
 
 	/*Increase the bar by 10% each time this function is called*/
-	fraction += 0.1;
+	//fraction += 0.1;
 
 	/*Fill in the bar with the new fraction*/
 	gtk_progress_bar_set_fraction (GTK_PROGRESS_BAR (progress_bar), fraction);
@@ -79,30 +87,18 @@ button_clicked_handler (GtkWidget  *button,
     fraction = 0.0;
     
     GThread    *thread;
-    if (!wd){
-        wd = g_malloc (sizeof *wd);
-        wd->window = data;
-        
-        /* add a timeout that will update the progress bar every 100ms */
-        wd->progress_id = g_timeout_add (500, fill, progress_bar);
-        
-        /* run the time-consuming operation in a separate thread */
-        thread = g_thread_new ("worker", worker, wd);
-        g_thread_unref (thread);
-    }
-    else{
-        /* we finished working, do something back in the main thread */
+    if (wd){
         g_idle_add (worker_finish_in_idle, wd);
-        wd = g_malloc (sizeof *wd);
-        wd->window = data;
-        
-        /* add a timeout that will update the progress bar every 100ms */
-        wd->progress_id = g_timeout_add (500, fill, progress_bar);
-        
-        /* run the time-consuming operation in a separate thread */
-        thread = g_thread_new ("worker", worker, wd);
-        g_thread_unref (thread);
     }
+    wd = (WorkerData*)g_malloc (sizeof WorkerData);
+    wd->window = data;
+        
+    /* add a timeout that will update the progress bar every 100ms */
+    wd->progress_id = g_timeout_add (500, fill, progress_bar);
+        
+    /* run the time-consuming operation in a separate thread */
+    thread = g_thread_new ("worker", worker, wd);
+    g_thread_unref (thread);
     
 }
 
